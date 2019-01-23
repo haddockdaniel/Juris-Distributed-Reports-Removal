@@ -310,7 +310,7 @@ namespace JurisUtilityBase
         {
             string reportSQL = "";
 
-                reportSQL = "  SELECT empinitials,empname, count(aireport.name) as RptCount" +
+                reportSQL = "  SELECT empinitials as Initials,empname as Name, count(aireport.name) as ReportCount" +
                 " FROM [DistributedReports]" +
                 " inner join organizationalunit on TargetOrganizationalUnitId=organizationalunit.id" +
                 " inner join aireport on aireport.reportuid=reportid" +
