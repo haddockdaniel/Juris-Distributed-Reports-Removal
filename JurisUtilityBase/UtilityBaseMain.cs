@@ -123,7 +123,7 @@ namespace JurisUtilityBase
             // To run a T-SQL statement with no results, int RecordsAffected = _jurisUtility.ExecuteNonQueryCommand(0, SQL);
             // To get an ADODB.Recordset, ADODB.Recordset myRS = _jurisUtility.RecordsetFromSQL(SQL);
 
-            chosenDate = dateTimePicker1.Value.ToString("yyyy-MM-dd");
+            chosenDate = dateTimePicker1.Value.ToString(@"MM/dd/yyyy");
 
             string SQLTkpr = getReportSQL();
 
