@@ -90,8 +90,14 @@ namespace JurisUtilityBase
             {
                 ///GetFieldLengths();
             }
+
+
+
+
+
+
             comboBox1.ClearItems();
-            string SQLTkpr = "select cast(EmpSysNbr as varchar) + ' ' + EmpName as employee from employee";
+            string SQLTkpr = "select cast(EmpInitials as varchar) + '       ' + EmpName as employee from employee order by EmpInitials";
             DataSet myRSTkpr = _jurisUtility.RecordsetFromSQL(SQLTkpr);
 
             if (myRSTkpr.Tables[0].Rows.Count == 0)
@@ -102,7 +108,7 @@ namespace JurisUtilityBase
                 foreach (DataRow dr in myRSTkpr.Tables[0].Rows)
                 {
                     comboBox1.Items.Add(dr["employee"].ToString());
-                    allEmployees = allEmployees + dr["employee"].ToString().Split(' ')[0] + ",";
+                    allEmployees = allEmployees + "" + dr["employee"].ToString().Split(' ')[0] + ",";
                 }
                 allEmployees = allEmployees.TrimEnd(',');
                 
@@ -125,25 +131,45 @@ namespace JurisUtilityBase
 
             chosenDate = dateTimePicker1.Value.ToString(@"MM/dd/yyyy");
 
-            string SQLTkpr = getReportSQL();
 
-            DataSet report = _jurisUtility.RecordsetFromSQL(SQLTkpr);
+            string SQLTkpr = "select * from employee where empid like '% %'";
+            DataSet myRSTkpr = _jurisUtility.RecordsetFromSQL(SQLTkpr);
 
-            ReportDisplay rpds = new ReportDisplay(report);
-            rpds.ShowDialog();
-
-            DialogResult result = MessageBox.Show("Would you like to process the data shown in the report?", "Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-            if (result == System.Windows.Forms.DialogResult.Yes)
+            if (myRSTkpr.Tables[0].Rows.Count > 0)
+                MessageBox.Show("This data has Employee IDS that contain spaces. This is considered invalid data" + "\r\n" + "and this tool will only work for validated data. Please contact Professional Services.", "Data Integrity Issue", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+            else
             {
-                string SQL = "delete from distributedreports" +
-                " where convert(varchar(10),reportgeneratedtime,101)>='" + chosenDate + "' and targetorganizationalunitid iN (select organizationalunit.id" +
-                " from organizationalunit inner join employee on code=empid where EmpSysNbr in (" + employees + "))";
 
-                _jurisUtility.ExecuteNonQueryCommand(0, SQL);
-                UpdateStatus("Database Updated.", 1, 1);
 
-                MessageBox.Show("The process is complete", "Confirmation", MessageBoxButtons.OK, MessageBoxIcon.None);
+                SQLTkpr = getReportSQL();
+
+                DataSet report = _jurisUtility.RecordsetFromSQL(SQLTkpr);
+
+                ReportDisplay rpds = new ReportDisplay(report);
+                rpds.ShowDialog();
+
+                DialogResult result = MessageBox.Show("Would you like to process the data shown in the report?", "Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                if (result == System.Windows.Forms.DialogResult.Yes)
+                {
+                    string SQL = "delete from distributedreports" +
+                    " where (convert(varchar(10),reportgeneratedtime,101)<='" + chosenDate + "' and targetorganizationalunitid iN (select organizationalunit.id" +
+                    " from organizationalunit inner join employee on code=empid where EmpInitials in (" + employees + "))) or targetorganizationalunitid = 1";
+
+                    _jurisUtility.ExecuteNonQueryCommand(0, SQL);
+
+                    //delete items not associated with employees (system generated)
+                    SQL = "delete from distributedreports" +
+                    " where (convert(varchar(10),reportgeneratedtime,101)<='" + chosenDate + "' and targetorganizationalunitid iN (select organizationalunit.id" +
+                    " from organizationalunit where code not in (select empinitials from employee)";
+
+                    _jurisUtility.ExecuteNonQueryCommand(0, SQL);
+
+
+                    UpdateStatus("Database Updated.", 1, 1);
+
+                    MessageBox.Show("The process is complete", "Confirmation", MessageBoxButtons.OK, MessageBoxIcon.None);
+                }
             }
 
         }
@@ -315,7 +341,7 @@ namespace JurisUtilityBase
                 " inner join organizationalunit on TargetOrganizationalUnitId=organizationalunit.id" +
                 " inner join aireport on aireport.reportuid=reportid" +
                 " inner join employee on code=empid" +
-                " where convert(varchar(10),reportgeneratedtime,101)>='" + chosenDate + "' and empsysnbr in (" + employees + ")" +
+                " where convert(varchar(10),reportgeneratedtime,101)<='" + chosenDate + "' and EmpInitials in (" + employees + ")" +
                 " group by empinitials,empname";
 
             return reportSQL;
@@ -324,9 +350,17 @@ namespace JurisUtilityBase
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (!comboBox1.Text.StartsWith("*"))
+            {
                 employees = comboBox1.Text.Split(' ')[0];
+                employees = "'" + employees + "'";
+            }
             else
+            {
                 employees = allEmployees;
+                employees = employees.Replace(",", "','");
+                employees = "'" + employees + "'";
+            }
+
         }
 
 
