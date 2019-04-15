@@ -12,6 +12,7 @@ using JDataEngine;
 using JurisAuthenticator;
 using JurisUtilityBase.Properties;
 using System.Data.OleDb;
+using System.Threading;
 
 namespace JurisUtilityBase
 {
@@ -97,7 +98,7 @@ namespace JurisUtilityBase
 
 
             comboBox1.ClearItems();
-            string SQLTkpr = "select cast(EmpInitials as varchar) + '       ' + EmpName as employee from employee order by EmpInitials";
+            string SQLTkpr = "select cast(EmpId as varchar) + '       ' + EmpName as employee from employee order by EmpInitials";
             DataSet myRSTkpr = _jurisUtility.RecordsetFromSQL(SQLTkpr);
 
             if (myRSTkpr.Tables[0].Rows.Count == 0)
@@ -139,8 +140,11 @@ namespace JurisUtilityBase
                 MessageBox.Show("This data has Employee IDS that contain spaces. This is considered invalid data" + "\r\n" + "and this tool will only work for validated data. Please contact Professional Services.", "Data Integrity Issue", MessageBoxButtons.OK, MessageBoxIcon.Stop);
             else
             {
-
-
+                Cursor.Current = Cursors.WaitCursor;
+                Application.DoEvents();
+                toolStripStatusLabel.Text = "Running";
+                statusStrip.Refresh();
+                
                 SQLTkpr = getReportSQL();
 
                 DataSet report = _jurisUtility.RecordsetFromSQL(SQLTkpr);
@@ -152,23 +156,33 @@ namespace JurisUtilityBase
 
                 if (result == System.Windows.Forms.DialogResult.Yes)
                 {
+                    UpdateStatus("Beginning removal.", 1, 3);
+                    Thread.Sleep(50);
                     string SQL = "delete from distributedreports" +
-                    " where (convert(varchar(10),reportgeneratedtime,101)<='" + chosenDate + "' and targetorganizationalunitid iN (select organizationalunit.id" +
-                    " from organizationalunit inner join employee on code=empid where EmpInitials in (" + employees + "))) or targetorganizationalunitid = 1";
+                    " where (convert(datetime,reportgeneratedtime,101) <= convert(datetime,'" + chosenDate + "', 101) and targetorganizationalunitid iN (select organizationalunit.id" +
+                    " from organizationalunit inner join employee on code=empid where EmpId in (" + employees + "))) or targetorganizationalunitid = 1";
 
                     _jurisUtility.ExecuteNonQueryCommand(0, SQL);
 
+                    UpdateStatus("Removing system Generated Reports.", 2, 3);
+                    Thread.Sleep(50);
                     //delete items not associated with employees (system generated)
                     SQL = "delete from distributedreports" +
-                    " where (convert(varchar(10),reportgeneratedtime,101)<='" + chosenDate + "' and targetorganizationalunitid iN (select organizationalunit.id" +
-                    " from organizationalunit where code not in (select empinitials from employee)";
+                    " where (convert(datetime,reportgeneratedtime,101) <= convert(datetime,'" + chosenDate + "', 101) and targetorganizationalunitid iN (select organizationalunit.id" +
+                    " from organizationalunit where code not in (select empid from employee)))";
 
                     _jurisUtility.ExecuteNonQueryCommand(0, SQL);
 
 
-                    UpdateStatus("Database Updated.", 1, 1);
+                    UpdateStatus("Database Updated.", 3, 3);
 
                     MessageBox.Show("The process is complete", "Confirmation", MessageBoxButtons.OK, MessageBoxIcon.None);
+
+                    Cursor.Current = Cursors.WaitCursor;
+                    Application.DoEvents();
+                    toolStripStatusLabel.Text = "Ready to Execute";
+                    statusStrip.Refresh();
+                    
                 }
             }
 
@@ -269,6 +283,7 @@ namespace JurisUtilityBase
                     labelPercentComplete.Text = string.Format("{0} percent complete", percentage);
                 }
             }
+            progressBar.Refresh();
         }
 
         private void DeleteLog()
@@ -336,13 +351,19 @@ namespace JurisUtilityBase
         {
             string reportSQL = "";
 
-                reportSQL = "  SELECT empinitials as Initials,empname as Name, count(aireport.name) as ReportCount" +
+            reportSQL = "  SELECT empinitials as Initials,empname as Name, count(DistributedReports.ID) as ReportCount" +
                 " FROM [DistributedReports]" +
                 " inner join organizationalunit on TargetOrganizationalUnitId=organizationalunit.id" +
-                " inner join aireport on aireport.reportuid=reportid" +
+               // " inner join aireport on aireport.reportuid=reportid" +
                 " inner join employee on code=empid" +
-                " where convert(varchar(10),reportgeneratedtime,101)<='" + chosenDate + "' and EmpInitials in (" + employees + ")" +
-                " group by empinitials,empname";
+                " where convert(datetime,reportgeneratedtime,101)<= convert(datetime,'" + chosenDate + "', 101) and EmpId in (" + employees + ")" +
+                " group by empinitials,empname" +
+                " union all " +
+                " select 'System Generated' as Initials, 'System Generated' as Name, count(DistributedReports.ID) as ReportCount " +
+				" FROM [DistributedReports] " +
+                " inner join organizationalunit on TargetOrganizationalUnitId=organizationalunit.id " +
+                //" inner join aireport on aireport.reportuid=reportid " +
+                " where convert(datetime,reportgeneratedtime,101)<=convert(datetime,'" + chosenDate + "', 101) and code not in (select empid from employee)";
 
             return reportSQL;
         }
